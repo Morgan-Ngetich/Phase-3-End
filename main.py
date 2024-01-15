@@ -3,14 +3,10 @@ from tabulate import tabulate
 from app.models import Department, Employee, Project
 from app.models import Base
 from app.database import session, engine
-from sqlite3 import IntegrityError
+from sqlalchemy.exc import IntegrityError
 
 # Create tables in the database
 Base.metadata.create_all(bind=engine)
-
-@click.group()
-def cli():
-    pass
 
 def echo_error(message):
     click.secho(message, fg='red')
@@ -30,7 +26,12 @@ def add_entity(entity, name, **kwargs):
         session.commit()
         echo_success(f"Added {entity.__name__.lower()}: {name}")
         display_entities(entity)
+    except IntegrityError as ie:
+        session.rollback()  # Rollback the session to avoid leaving the transaction open
+        echo_error(f"IntegrityError: {str(ie)}")
+        echo_error(f"{entity.__name__.lower()} with name '{name}' already exists. Please choose a different name.")
     except Exception as e:
+        session.rollback()  # Rollback the session in case of other exceptions
         echo_error(f"Error adding {entity.__name__.lower()}: {str(e)}")
 
 # Remove Entity Function
@@ -52,7 +53,6 @@ def remove_entity(entity, name, prompt_id=False):
     except Exception as e:
         echo_error(f"Error removing {entity.__name__.lower()}: {str(e)}")
 
-
 def display_entities(entity):
     try:
         entities = session.query(entity).all()
@@ -65,43 +65,51 @@ def display_entities(entity):
     except Exception as e:
         echo_error(f"Error displaying {entity.__name__.lower()}s: {str(e)}")
 
+def get_available_employees():
+    return session.query(Employee).filter(Employee.department_id.is_(None)).all()
 
-# Adding a Department
-@cli.command()
-@click.option('--name', prompt='Enter department name', callback=validate_name)
-def add_department(name):
+def add_employees_to_department(department):
     try:
-        employees = session.query(Employee).all()
-        if employees:
-            headers = ["ID", "Name"]
-            data = [(employee.id, employee.name) for employee in employees]
-            click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
-            head_of_dept_id = click.prompt('Choose an employee ID to be the head of the department', type=int)
+        available_employees = get_available_employees()
 
-            head_of_dept = session.query(Employee).filter_by(id=head_of_dept_id).first()
-            if head_of_dept:
-                # Attempt to add the department
-                add_entity(Department, name, head_of_department=head_of_dept)
+        if not available_employees:
+            echo_error("No available employees to add to the department.")
+            return
+
+        headers = ["ID", "Name"]
+        data = [(employee.id, employee.name) for employee in available_employees]
+        click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
+
+        # Select head of department
+        head_of_dept_id = click.prompt('Choose an employee ID to be the head of the department', type=int)
+        head_of_dept = session.query(Employee).filter_by(id=head_of_dept_id).first()
+
+        if not head_of_dept:
+            echo_error(f"Employee with ID {head_of_dept_id} not found.")
+            return
+
+        # Add head of department
+        add_entity(Department, department, head_of_department=head_of_dept)
+
+        # Prompt user to select employees to add to the department
+        employee_ids = click.prompt('Enter the IDs of the employees to add (comma-separated)', type=str)
+        employee_ids = [int(e_id) for e_id in employee_ids.split(',') if e_id.isdigit()]
+
+        for employee_id in employee_ids:
+            employee = session.query(Employee).filter_by(id=employee_id).first()
+            if employee:
+                employee.department_id = department.id
             else:
-                echo_error(f"Employee with ID {head_of_dept_id} not found.")
-        else:
-            echo_error("No employees found. Please add an employee first.")
-    except IntegrityError:
-        # Handle the case where a department with the same name already exists
-        echo_error(f"Department with name '{name}' already exists. Please choose a different name.")
+                echo_error(f"Employee with ID {employee_id} not found.")
+
+        echo_success(f"Employees added to department {department.name}")
+        display_entities(Employee)
     except Exception as e:
-        echo_error(f"Error adding department: {str(e)}")
+        echo_error(f"Error adding employees to department: {str(e)}")
 
-# Removing a Department
-@cli.command()
-@click.option('--name', prompt='Enter department name', callback=validate_name)
-def remove_department(name):
-    remove_entity(Department, name)
-
-# Displaying Departments
-@cli.command()
-def display_departments():
-    display_entities(Department)
+@click.group()
+def cli():
+    pass
 
 # Adding an Employee
 @cli.command()
@@ -109,20 +117,28 @@ def display_departments():
 def add_employee(name):
     try:
         departments = session.query(Department).all()
-        if departments:
+
+        if not departments:
+            echo_error("No available departments to assign the employee to.")
+            add_entity(Employee, name)  # Add the employee without assigning to any department
+        else:
             headers = ["ID", "Name"]
             data = [(department.id, department.name) for department in departments]
             click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
-            department_name = click.prompt('Choose a department name to assign the employee to', type=str)
 
-            department = session.query(Department).filter_by(name=department_name).first()
-            if department:
-                add_entity(Employee, name, department_id=department.id)
+            add_to_department = click.confirm('Do you want to add the employee to a department?', default=True)
+
+            if add_to_department:
+                department_name = click.prompt('Choose a department name to assign the employee to', type=str)
+
+                department = session.query(Department).filter_by(name=department_name).first()
+                if department:
+                    add_entity(Employee, name, department_id=department.id)
+                else:
+                    echo_error(f"Department '{department_name}' not found.")
             else:
-                echo_error(f"Department '{department_name}' not found.")
-        else:
-            # No departments available, create an employee without associating it with any department
-            add_entity(Employee, name)
+                add_entity(Employee, name)  # Add the employee without assigning to any department
+
     except Exception as e:
         echo_error(f"Error adding employee: {str(e)}")
 
@@ -183,7 +199,6 @@ def display_heads_of_departments():
             click.echo("No head of departments found")
     except Exception as e:
         echo_error(f"Error displaying heads of departments: {str(e)}")
-
 
 # Displaying Employees in a Certain Department
 @cli.command()
