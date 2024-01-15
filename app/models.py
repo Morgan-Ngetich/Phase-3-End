@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Table, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -12,16 +12,15 @@ employee_project_association = Table(
     Column('project_id', Integer, ForeignKey('projects.id'))
 )
 
+
 class Department(Base):
     __tablename__ = 'departments'
     id = Column(Integer, primary_key=True)
-    name = Column(String)  # Update the column name to 'name'
+    name = Column(String, unique=True, nullable=False)  # Added unique constraint
     head_of_department_id = Column(Integer, ForeignKey('employees.id'))
     head_of_department = relationship('Employee', foreign_keys=[head_of_department_id], uselist=False)
     employees = relationship('Employee', backref='department', foreign_keys='Employee.department_id')
     projects = relationship('Project', back_populates='department')
-
-
 
 class Employee(Base):
     __tablename__ = 'employees'

@@ -3,6 +3,7 @@ from tabulate import tabulate
 from app.models import Department, Employee, Project
 from app.models import Base
 from app.database import session, engine
+from sqlite3 import IntegrityError
 
 # Create tables in the database
 Base.metadata.create_all(bind=engine)
@@ -32,18 +33,25 @@ def add_entity(entity, name, **kwargs):
     except Exception as e:
         echo_error(f"Error adding {entity.__name__.lower()}: {str(e)}")
 
-def remove_entity(entity, name):
+# Remove Entity Function
+def remove_entity(entity, name, prompt_id=False):
     try:
-        entity_instance = session.query(entity).filter_by(name=name).first()
+        if prompt_id:
+            entity_id = click.prompt(f'Enter the ID of the {entity.__name__.lower()} to remove', type=int)
+            entity_instance = session.query(entity).filter_by(id=entity_id).first()
+        else:
+            entity_instance = session.query(entity).filter_by(name=name).first()
+
         if entity_instance:
             session.delete(entity_instance)
             session.commit()
-            echo_success(f"Removed {entity.__name__.lower()}: {name}")
+            echo_success(f"Removed {entity.__name__.lower()}: {entity_instance.name}")
             display_entities(entity)
         else:
             echo_error(f"{entity.__name__.lower()} with name '{name}' not found")
     except Exception as e:
         echo_error(f"Error removing {entity.__name__.lower()}: {str(e)}")
+
 
 def display_entities(entity):
     try:
@@ -72,11 +80,15 @@ def add_department(name):
 
             head_of_dept = session.query(Employee).filter_by(id=head_of_dept_id).first()
             if head_of_dept:
+                # Attempt to add the department
                 add_entity(Department, name, head_of_department=head_of_dept)
             else:
                 echo_error(f"Employee with ID {head_of_dept_id} not found.")
         else:
             echo_error("No employees found. Please add an employee first.")
+    except IntegrityError:
+        # Handle the case where a department with the same name already exists
+        echo_error(f"Department with name '{name}' already exists. Please choose a different name.")
     except Exception as e:
         echo_error(f"Error adding department: {str(e)}")
 
@@ -118,7 +130,7 @@ def add_employee(name):
 @cli.command()
 @click.option('--name', prompt='Enter employee name', callback=validate_name)
 def remove_employee(name):
-    remove_entity(Employee, name)
+    remove_entity(Employee, name, prompt_id=True)
 
 # Displaying Employees
 @cli.command()
@@ -151,7 +163,7 @@ def add_project(name):
 @cli.command()
 @click.option('--name', prompt='Enter project name', callback=validate_name)
 def remove_project(name):
-    remove_entity(Project, name)
+    remove_entity(Project, name, prompt_id=True)
 
 # Displaying Projects
 @cli.command()
@@ -171,6 +183,7 @@ def display_heads_of_departments():
             click.echo("No head of departments found")
     except Exception as e:
         echo_error(f"Error displaying heads of departments: {str(e)}")
+
 
 # Displaying Employees in a Certain Department
 @cli.command()
