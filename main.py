@@ -111,6 +111,30 @@ def add_employees_to_department(department):
 def cli():
     pass
 
+# Adding a Department
+@cli.command()
+@click.option('--name', prompt='Enter department name', callback=validate_name)
+def add_department(name):
+    try:
+        existing_department = session.query(Department).filter_by(name=name).first()
+        if existing_department:
+            echo_error(f"Department with name '{name}' already exists. Please choose a different name.")
+        else:
+            add_employees_to_department(Department(name=name))
+    except Exception as e:
+        echo_error(f"Error adding department: {str(e)}")
+
+# Removing a Department
+@cli.command()
+@click.option('--name', prompt='Enter department name', callback=validate_name)
+def remove_department(name):
+    remove_entity(Department, name)
+
+# Displaying Departments
+@cli.command()
+def display_departments():
+    display_entities(Department)
+
 # Adding an Employee
 @cli.command()
 @click.option('--name', prompt='Enter employee name', callback=validate_name)
