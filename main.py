@@ -19,6 +19,7 @@ def validate_name(ctx, param, value):
         raise click.BadParameter('Name cannot be empty.')
     return value
 
+# Updated add_entity function
 def add_entity(entity, name, **kwargs):
     try:
         new_entity = entity(name=name, **kwargs)
@@ -26,13 +27,16 @@ def add_entity(entity, name, **kwargs):
         session.commit()
         echo_success(f"Added {entity.__name__.lower()}: {name}")
         display_entities(entity)
+        return new_entity  # Return the newly added entity
     except IntegrityError as ie:
         session.rollback()  # Rollback the session to avoid leaving the transaction open
         echo_error(f"IntegrityError: {str(ie)}")
         echo_error(f"{entity.__name__.lower()} with name '{name}' already exists. Please choose a different name.")
+        return None  # Return None on IntegrityError
     except Exception as e:
         session.rollback()  # Rollback the session in case of other exceptions
         echo_error(f"Error adding {entity.__name__.lower()}: {str(e)}")
+        return None  # Return None on other exceptions
 
 # Remove Entity Function
 def remove_entity(entity, name, prompt_id=False):
@@ -80,6 +84,10 @@ def add_employees_to_department(department):
         data = [(employee.id, employee.name) for employee in available_employees]
         click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
 
+        # Prompt user to select employees to add to the department
+        employee_ids = click.prompt('Enter the IDs of the employees to add (comma-separated)', type=str)
+        employee_ids = [int(e_id) for e_id in employee_ids.split(',') if e_id.isdigit()]
+
         # Select head of department
         head_of_dept_id = click.prompt('Choose an employee ID to be the head of the department', type=int)
         head_of_dept = session.query(Employee).filter_by(id=head_of_dept_id).first()
@@ -89,11 +97,8 @@ def add_employees_to_department(department):
             return
 
         # Add head of department
-        add_entity(Department, department, head_of_department=head_of_dept)
-
-        # Prompt user to select employees to add to the department
-        employee_ids = click.prompt('Enter the IDs of the employees to add (comma-separated)', type=str)
-        employee_ids = [int(e_id) for e_id in employee_ids.split(',') if e_id.isdigit()]
+        department.head_of_department = head_of_dept
+        session.commit()
 
         for employee_id in employee_ids:
             employee = session.query(Employee).filter_by(id=employee_id).first()
@@ -103,7 +108,6 @@ def add_employees_to_department(department):
                 echo_error(f"Employee with ID {employee_id} not found.")
 
         echo_success(f"Employees added to department {department.name}")
-        display_entities(Employee)
     except Exception as e:
         echo_error(f"Error adding employees to department: {str(e)}")
 
@@ -120,7 +124,9 @@ def add_department(name):
         if existing_department:
             echo_error(f"Department with name '{name}' already exists. Please choose a different name.")
         else:
-            add_employees_to_department(Department(name=name))
+            new_department = add_entity(Department, name)
+            if new_department:
+                add_employees_to_department(new_department)
     except Exception as e:
         echo_error(f"Error adding department: {str(e)}")
 
@@ -259,6 +265,7 @@ def display_projects_by_departments():
             echo_success("No departments found")
     except Exception as e:
         echo_error(f"Error displaying projects by departments: {str(e)}")
+
 
 if __name__ == '__main__':
     cli()

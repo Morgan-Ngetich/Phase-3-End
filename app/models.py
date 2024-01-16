@@ -12,7 +12,6 @@ employee_project_association = Table(
     Column('project_id', Integer, ForeignKey('projects.id'))
 )
 
-
 class Department(Base):
     __tablename__ = 'departments'
     id = Column(Integer, primary_key=True)
