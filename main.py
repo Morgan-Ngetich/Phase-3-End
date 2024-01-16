@@ -1,9 +1,11 @@
+import sys
 import click
 from tabulate import tabulate
 from app.models import Department, Employee, Project
 from app.models import Base
 from app.database import session, engine
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 # Create tables in the database
 Base.metadata.create_all(bind=engine)
@@ -72,45 +74,80 @@ def display_entities(entity):
 def get_available_employees():
     return session.query(Employee).filter(Employee.department_id.is_(None)).all()
 
-def add_employees_to_department(department):
+def add_employees_to_department():
     try:
-        available_employees = get_available_employees()
-
-        if not available_employees:
-            echo_error("No available employees to add to the department.")
+        # Display the departments table for the user to select
+        departments = session.query(Department).all()
+        if not departments:
+            click.echo("No departments found. Please add a department first.")
             return
 
         headers = ["ID", "Name"]
-        data = [(employee.id, employee.name) for employee in available_employees]
+        data = [(department.id, department.name) for department in departments]
         click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
 
-        # Prompt user to select employees to add to the department
-        employee_ids = click.prompt('Enter the IDs of the employees to add (comma-separated)', type=str)
-        employee_ids = [int(e_id) for e_id in employee_ids.split(',') if e_id.isdigit()]
+        # Prompt user to select a department
+        department_id = click.prompt('Choose a department ID to add employees to', type=int)
+        department = session.query(Department).filter_by(id=department_id).first()
 
-        # Select head of department
-        head_of_dept_id = click.prompt('Choose an employee ID to be the head of the department', type=int)
-        head_of_dept = session.query(Employee).filter_by(id=head_of_dept_id).first()
-
-        if not head_of_dept:
-            echo_error(f"Employee with ID {head_of_dept_id} not found.")
+        if not department:
+            click.secho(f"Department with ID {department_id} not found.", fg='red')
             return
 
-        # Add head of department
-        department.head_of_department = head_of_dept
-        session.commit()
+        # Filter employees not assigned to any departments
+        available_employees = (
+            session.query(Employee)
+            .filter(Employee.department_id.is_(None))
+            .options(joinedload(Employee.projects))
+            .all()
+        )
 
+        if not available_employees:
+            click.secho("No available employees to add to the department.", fg='red')
+            return
+
+        # Display the table of employees not assigned to any departments
+        headers = ["ID", "Name", "Projects"]
+        data = [(employee.id, employee.name, ', '.join([project.name for project in employee.projects])) for employee in available_employees]
+        click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
+
+        # Prompt user to select employee IDs to add (comma-separated)
+        employee_ids_str = click.prompt('Enter the IDs of the employees to add (comma-separated)', type=str)
+        employee_ids = [int(e_id) for e_id in employee_ids_str.split(',') if e_id.isdigit()]
+
+        # Add selected employees to the department
         for employee_id in employee_ids:
             employee = session.query(Employee).filter_by(id=employee_id).first()
             if employee:
                 employee.department_id = department.id
             else:
-                echo_error(f"Employee with ID {employee_id} not found.")
+                click.secho(f"Employee with ID {employee_id} not found.", fg='red')
 
-        echo_success(f"Employees added to department {department.name}")
+        session.commit()
+
+        click.secho(f"Employees added to department {department.name}", fg='green')
+
     except Exception as e:
-        echo_error(f"Error adding employees to department: {str(e)}")
+        click.secho(f"Error adding employees to department: {str(e)}", fg='red')
+   
 
+def display_employees_in_department(department_name):
+    try:
+        department = session.query(Department).filter_by(name=department_name).first()
+        if department:
+            employees = department.employees
+            if employees:
+                headers = ["Employee ID", "Employee Name"]
+                data = [(employee.id, employee.name) for employee in employees]
+                click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
+            else:
+                click.echo(f"No employees found in Department: {department_name}")
+        else:
+            click.echo(f"Department: {department_name} not found")
+    except Exception as e:
+        click.echo(f"Error displaying employees in department: {str(e)}")
+        
+        
 @click.group()
 def cli():
     pass
@@ -266,6 +303,11 @@ def display_projects_by_departments():
     except Exception as e:
         echo_error(f"Error displaying projects by departments: {str(e)}")
 
-
+# Add employees to a department
+@cli.command()
+def add_employees_to_a_department():
+    add_employees_to_department()
+    
+    
 if __name__ == '__main__':
     cli()
