@@ -147,7 +147,58 @@ def display_employees_in_department(department_name):
     except Exception as e:
         click.echo(f"Error displaying employees in department: {str(e)}")
         
+
+def assign_projects_to_employees_in_department():
+    try:
+        # Display the departments table for the user to select
+        departments = session.query(Department).all()
+        if not departments:
+            click.echo("No departments found. Please add a department first.")
+            return
+
+        headers = ["ID", "Name"]
+        data = [(department.id, department.name) for department in departments]
+        click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
+
+        # Prompt user to select a department
+        department_id = click.prompt('Choose a department ID to assign projects to employees', type=int)
+        department = session.query(Department).filter_by(id=department_id).first()
+
+        if not department:
+            click.secho(f"Department with ID {department_id} not found.", fg='red')
+            return
+
+        # Display the projects table for the user to select
+        projects = session.query(Project).filter_by(department_id=department.id).all()
+
+        if not projects:
+            click.echo(f"No projects found in Department: {department.name}. Please add a project first.")
+            return
+
+        headers = ["ID", "Name"]
+        data = [(project.id, project.name) for project in projects]
+        click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
+
+        # Prompt user to select project IDs to assign (comma-separated)
+        project_ids_str = click.prompt('Enter the IDs of the projects to assign (comma-separated)', type=str)
+        project_ids = [int(p_id) for p_id in project_ids_str.split(',') if p_id.isdigit()]
+
+        # Assign selected projects to employees in the department
+        for project_id in project_ids:
+            project = session.query(Project).filter_by(id=project_id, department_id=department.id).first()
+            if project:
+                project.employees = department.employees
+            else:
+                click.secho(f"Project with ID {project_id} not found in Department: {department.name}.", fg='red')
+
+        session.commit()
+
+        click.secho(f"Projects assigned to employees in department {department.name}", fg='green')
+
+    except Exception as e:
+        click.secho(f"Error assigning projects to employees in department: {str(e)}", fg='red')
         
+                
 @click.group()
 def cli():
     pass
@@ -308,6 +359,11 @@ def display_projects_by_departments():
 def add_employees_to_a_department():
     add_employees_to_department()
     
+# Assign projects to employees in a department
+@cli.command()
+def assign_projects_to_employees():
+    assign_projects_to_employees_in_department()
     
+        
 if __name__ == '__main__':
     cli()
