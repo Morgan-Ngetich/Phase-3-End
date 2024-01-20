@@ -19,9 +19,22 @@ def echo_success(message):
 def validate_name(ctx, param, value):
     if not value:
         raise click.BadParameter('Name cannot be empty.')
+    if not value.isalpha():
+        raise click.BadParameter('Name should only contain alphabets.')
     return value
 
-# Updated add_entity function
+def validate_positive_int(ctx, param, value):
+    if not value:
+        raise click.BadParameter('ID cannot be empty.')
+    try:
+        int_value = int(value)
+        if int_value <= 0:
+            raise ValueError
+        return int_value
+    except ValueError:
+        raise click.BadParameter('ID should be a positive integer.')
+    
+
 def add_entity(entity, name, **kwargs):
     try:
         new_entity = entity(name=name, **kwargs)
@@ -44,7 +57,7 @@ def add_entity(entity, name, **kwargs):
 def remove_entity(entity, name, prompt_id=False):
     try:
         if prompt_id:
-            entity_id = click.prompt(f'Enter the ID of the {entity.__name__.lower()} to remove', type=int)
+            entity_id = click.prompt(f'Enter the ID of the {entity.__name__.lower()} to remove', type=click.IntRange(1))
             entity_instance = session.query(entity).filter_by(id=entity_id).first()
         else:
             entity_instance = session.query(entity).filter_by(name=name).first()

@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 alembic = "*"
+click = "*"
+tabulate = "*"
 
 [dev-packages]
 
