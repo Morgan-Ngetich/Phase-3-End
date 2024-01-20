@@ -198,6 +198,36 @@ def assign_projects_to_employees_in_department():
     except Exception as e:
         click.secho(f"Error assigning projects to employees in department: {str(e)}", fg='red')
         
+# Function to view the employee info
+def view_employee_info():
+    try:
+        # Prompt user to enter their employee ID
+        employee_id = click.prompt('Enter your employee ID', type=int)
+        employee = session.query(Employee).filter_by(id=employee_id).first()
+
+        if not employee:
+            echo_error(f"Employee with ID {employee_id} not found.")
+            return
+
+        # Display information about the employee's department
+        department = employee.department
+        if department:
+            echo_success(f"You are part of the '{department.name}' department.")
+
+            # Display projects assigned to the employee
+            projects = employee.projects
+            if projects:
+                headers = ["Project ID", "Project Name"]
+                data = [(project.id, project.name) for project in projects]
+                click.echo(tabulate(data, headers=headers, tablefmt="grid", numalign="center"))
+            else:
+                echo_success("You are not assigned to any projects.")
+        else:
+            echo_success("You are not assigned to any department.")
+
+    except Exception as e:
+        echo_error(f"Error viewing employee information: {str(e)}")
+    
                 
 @click.group()
 def cli():
@@ -364,6 +394,11 @@ def add_employees_to_a_department():
 def assign_projects_to_employees():
     assign_projects_to_employees_in_department()
     
+# View the employee info
+@click.command()
+def view_my_info():
+    view_employee_info()    
+cli.add_command(view_my_info)  
         
 if __name__ == '__main__':
     cli()
