@@ -1,0 +1,40 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Output files
+*.pyc
+*.pyo
+*.pyd
+*.pyc
+
+# IDE settings
+.idea/
+.vscode/
+
+# Other
+.DS_Store
+Thumbs.db
