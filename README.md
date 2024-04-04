@@ -1,6 +1,6 @@
-# Project Title
+# Employee Management System
 
-Employee Management System
+
 
 ## Project Description
 
@@ -82,4 +82,4 @@ pip install -r requirements.txt
 
 ## License
 
-This project is licensed under the [MIT]() License.
+This project is licensed under the [MIT](https://github.com/Morgan-Ngetich/Phase-3-End/new/main) License.
